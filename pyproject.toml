@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "minns-sdk"
+version = "0.8.3"
+description = "Python SDK for Minns — the graph-native memory engine for agents"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Minns", email = "dev@minns.ai" }]
+keywords = ["minns", "graph", "memory", "agent", "sdk", "llm", "intent-parsing"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+    "Framework :: AsyncIO",
+]
+dependencies = [
+    "httpx>=0.25",
+    "typing-extensions>=4.5",
+]
+
+[project.urls]
+Homepage = "https://minns.ai"
+Documentation = "https://minns.ai/docs"
+Repository = "https://github.com/minns-ai/minns-sdk"
+
+[tool.hatch.build.targets.wheel]
+packages = ["minns"]
+
+[tool.mypy]
+strict = true
+python_version = "3.10"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "TCH"]
