@@ -212,7 +212,7 @@ results = client.search_code({
 ```python
 from minns import create_client, MinnsClient
 
-# Simple — API key only (connects to https://minns.ai)
+# Simple — API key only (connects to https://api.minns.ai)
 client = create_client("your-api-key")
 
 # With default IDs for event builders
@@ -246,7 +246,7 @@ client = MinnsClient(
 | `batch_max_size` | `int` | `10` | Max events before forcing a flush. |
 | `max_queue_size` | `int` | `1000` | Max local queue depth before enqueue throws. |
 
-> **Note:** The base URL defaults to `https://minns.ai`. Override with `base_url`.
+> **Note:** The base URL defaults to `https://api.minns.ai`. Override with `base_url`.
 
 ---
 

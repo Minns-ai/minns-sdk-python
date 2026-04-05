@@ -176,7 +176,7 @@ from .types import (
     WorldModelStatsResponse,
 )
 
-BASE_URL = "https://minns.ai"
+BASE_URL = "https://api.minns.ai"
 _DEFAULT_TIMEOUT = 30.0
 _DEFAULT_MAX_PAYLOAD = 1024 * 1024  # 1 MB
 _DEFAULT_MAX_QUEUE = 1000
