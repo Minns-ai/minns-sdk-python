@@ -380,7 +380,7 @@ class MinnsClient:
                 self._flush_timer.start()
             return self._local_ack(str(event.get("id", "queued")), True)
 
-        return self._request("POST", "/api/events", strip_none({
+        return self._request("POST", "/events", strip_none({
             "event": event,
             "enable_semantic": enable_semantic,
         }))
@@ -396,7 +396,7 @@ class MinnsClient:
             return self._local_ack("empty", False)
         for i in range(0, len(events), self._batch_max_size):
             chunk = events[i : i + self._batch_max_size]
-            self._request("POST", "/api/events/batch", strip_none({
+            self._request("POST", "/events/batch", strip_none({
                 "events": list(chunk),
                 "enable_semantic": enable_semantic,
             }))
@@ -436,13 +436,13 @@ class MinnsClient:
     # ========================================================================
 
     def get_events(self, limit: int = 10) -> List[Event]:
-        return self._request("GET", f"/api/events?limit={limit}")
+        return self._request("GET", f"/events?limit={limit}")
 
     def send_simple_event(self, request: SimpleEventRequest) -> ProcessEventResponse:
-        return self._request("POST", "/api/events/simple", request)
+        return self._request("POST", "/events/simple", request)
 
     def send_state_change_event(self, request: StateChangeEventRequest) -> ProcessEventResponse:
-        return self._request("POST", "/api/events/state-change", request)
+        return self._request("POST", "/events/state-change", request)
 
     def send_transaction_event(self, request: TransactionEventRequest) -> ProcessEventResponse:
         # Map Python field names to wire format
@@ -451,21 +451,21 @@ class MinnsClient:
             body["from"] = body.pop("from_entity")
         if "to_entity" in body:
             body["to"] = body.pop("to_entity")
-        return self._request("POST", "/api/events/transaction", body)
+        return self._request("POST", "/events/transaction", body)
 
     # ========================================================================
     # Episodes
     # ========================================================================
 
     def get_episodes(self, limit: int = 10) -> List[EpisodeResponse]:
-        return self._request("GET", f"/api/episodes?limit={limit}")
+        return self._request("GET", f"/episodes?limit={limit}")
 
     # ========================================================================
     # Memory
     # ========================================================================
 
     def get_agent_memories(self, agent_id: AgentId, limit: int = 10) -> List[MemoryResponse]:
-        return self._request("GET", f"/api/memories/agent/{agent_id}?limit={limit}")
+        return self._request("GET", f"/memories/agent/{agent_id}?limit={limit}")
 
     def get_context_memories(
         self,
@@ -476,7 +476,7 @@ class MinnsClient:
         agent_id: AgentId | None = None,
         session_id: SessionId | None = None,
     ) -> List[MemoryResponse]:
-        return self._request("POST", "/api/memories/context", strip_none({
+        return self._request("POST", "/memories/context", strip_none({
             "context": context,
             "limit": limit,
             "min_similarity": min_similarity,
@@ -489,10 +489,10 @@ class MinnsClient:
     # ========================================================================
 
     def get_agent_strategies(self, agent_id: AgentId, limit: int = 10) -> List[StrategyResponse]:
-        return self._request("GET", f"/api/strategies/agent/{agent_id}?limit={limit}")
+        return self._request("GET", f"/strategies/agent/{agent_id}?limit={limit}")
 
     def get_similar_strategies(self, request: StrategySimilarityRequest) -> List[SimilarStrategyResponse]:
-        return self._request("POST", "/api/strategies/similar", request)
+        return self._request("POST", "/strategies/similar", request)
 
     def get_action_suggestions(
         self,
@@ -503,17 +503,17 @@ class MinnsClient:
         params: Dict[str, str] = {"context_hash": str(context_hash), "limit": str(limit)}
         if last_action_node is not None:
             params["last_action_node"] = str(last_action_node)
-        return self._request("GET", f"/api/suggestions?{urlencode(params)}")
+        return self._request("GET", f"/suggestions?{urlencode(params)}")
 
     # ========================================================================
     # System
     # ========================================================================
 
     def health_check(self) -> HealthResponse:
-        return self._request("GET", "/api/health")
+        return self._request("GET", "/health")
 
     def get_stats(self) -> StatsResponse:
-        return self._request("GET", "/api/stats")
+        return self._request("GET", "/stats")
 
     # ========================================================================
     # Claims
@@ -531,17 +531,17 @@ class MinnsClient:
         if event_id is not None:
             params["event_id"] = str(event_id)
         qs = f"?{urlencode(params)}" if params else ""
-        return self._request("GET", f"/api/claims{qs}")
+        return self._request("GET", f"/claims{qs}")
 
     def get_claim_by_id(self, claim_id: UInt64) -> ClaimResponse:
-        return self._request("GET", f"/api/claims/{claim_id}")
+        return self._request("GET", f"/claims/{claim_id}")
 
     def search_claims(self, request: ClaimSearchRequest) -> ClaimSearchResponse:
-        return self._request("POST", "/api/claims/search", request)
+        return self._request("POST", "/claims/search", request)
 
     def process_embeddings(self, limit: int | None = None) -> EmbeddingsProcessResponse:
         qs = f"?limit={limit}" if limit is not None else ""
-        return self._request("POST", f"/api/embeddings/process{qs}")
+        return self._request("POST", f"/embeddings/process{qs}")
 
     # ========================================================================
     # Search
@@ -557,7 +557,7 @@ class MinnsClient:
         payload: SearchRequest = (
             {"query": query, "mode": "hybrid"} if isinstance(query, str) else query
         )
-        return self._request("POST", "/api/search", payload)
+        return self._request("POST", "/search", payload)
 
     # ========================================================================
     # NLQ
@@ -573,7 +573,7 @@ class MinnsClient:
         payload: NLQRequest = (
             {"question": question} if isinstance(question, str) else question
         )
-        return self._request("POST", "/api/nlq", payload)
+        return self._request("POST", "/nlq", payload)
 
     def nlq(self, question: str | NLQRequest) -> NLQResponse:
         """Deprecated alias for :pymethod:`query`."""
@@ -593,7 +593,7 @@ class MinnsClient:
             if "agent_type" in query:
                 params["agent_type"] = query["agent_type"]
         qs = f"?{urlencode(params)}" if params else ""
-        return self._request("GET", f"/api/graph{qs}")
+        return self._request("GET", f"/graph{qs}")
 
     def get_graph_by_context(self, query: GraphContextQuery) -> GraphResponse:
         params: Dict[str, str] = {"context_hash": str(query["context_hash"])}
@@ -603,10 +603,10 @@ class MinnsClient:
             params["session_id"] = str(query["session_id"])
         if "agent_type" in query:
             params["agent_type"] = query["agent_type"]
-        return self._request("GET", f"/api/graph/context?{urlencode(params)}")
+        return self._request("GET", f"/graph/context?{urlencode(params)}")
 
     def query_graph_nodes(self, request: GraphNodeQueryRequest) -> GraphNodeQueryResponse:
-        return self._request("POST", "/api/graph/query", request)
+        return self._request("POST", "/graph/query", request)
 
     def traverse_graph(self, query: GraphTraverseQuery) -> GraphTraverseResponse:
         params: Dict[str, str] = {"start": query["start"]}
@@ -614,28 +614,28 @@ class MinnsClient:
             params["max_depth"] = str(query["max_depth"])
         if "node_types" in query:
             params["node_types"] = ",".join(query["node_types"])
-        return self._request("GET", f"/api/graph/traverse?{urlencode(params)}")
+        return self._request("GET", f"/graph/traverse?{urlencode(params)}")
 
     def persist_graph(self) -> GraphPersistResponse:
-        return self._request("POST", "/api/graph/persist")
+        return self._request("POST", "/graph/persist")
 
     def import_graph(self, request: GraphImportRequest) -> GraphImportResponse:
-        return self._request("POST", "/api/graph/import", request)
+        return self._request("POST", "/graph/import", request)
 
     # ========================================================================
     # Analytics
     # ========================================================================
 
     def get_analytics(self) -> AnalyticsResponse:
-        return self._request("GET", "/api/analytics")
+        return self._request("GET", "/analytics")
 
     def get_communities(self, algorithm: str | None = None) -> CommunityDetectionResponse:
         qs = f"?algorithm={algorithm}" if algorithm else ""
-        return self._request("GET", f"/api/communities{qs}")
+        return self._request("GET", f"/communities{qs}")
 
     def get_centrality(self, limit: int | None = None) -> CentralityResponse:
         qs = f"?limit={limit}" if limit is not None else ""
-        return self._request("GET", f"/api/centrality{qs}")
+        return self._request("GET", f"/centrality{qs}")
 
     def get_personalized_page_rank(
         self,
@@ -649,7 +649,7 @@ class MinnsClient:
             params["limit"] = str(limit)
         if min_score is not None:
             params["min_score"] = str(min_score)
-        return self._request("GET", f"/api/ppr?{urlencode(params)}")
+        return self._request("GET", f"/ppr?{urlencode(params)}")
 
     def get_reachability(
         self,
@@ -663,80 +663,80 @@ class MinnsClient:
             params["max_hops"] = str(max_hops)
         if max_results is not None:
             params["max_results"] = str(max_results)
-        return self._request("GET", f"/api/reachability?{urlencode(params)}")
+        return self._request("GET", f"/reachability?{urlencode(params)}")
 
     def get_causal_path(self, source: int, target: int) -> CausalPathResponse:
         return self._request(
-            "GET", f"/api/causal-path?{urlencode({'source': source, 'target': target})}"
+            "GET", f"/causal-path?{urlencode({'source': source, 'target': target})}"
         )
 
     def get_index_stats(self) -> List[IndexStatsResponse]:
-        return self._request("GET", "/api/indexes")
+        return self._request("GET", "/indexes")
 
     # ========================================================================
     # Conversation Ingestion
     # ========================================================================
 
     def ingest_conversations(self, request: ConversationIngestRequest) -> ConversationIngestResponse:
-        return self._request("POST", "/api/conversations/ingest", request)
+        return self._request("POST", "/conversations/ingest", request)
 
     def send_message(self, request: MessageRequest) -> MessageResponse:
-        return self._request("POST", "/api/messages", request)
+        return self._request("POST", "/messages", request)
 
     # ========================================================================
     # Code Intelligence
     # ========================================================================
 
     def send_code_file_event(self, request: CodeFileEventRequest) -> ProcessEventResponse:
-        return self._request("POST", "/api/events/code-file", request)
+        return self._request("POST", "/events/code-file", request)
 
     def send_code_review_event(self, request: CodeReviewEventRequest) -> ProcessEventResponse:
-        return self._request("POST", "/api/events/code-review", request)
+        return self._request("POST", "/events/code-review", request)
 
     def search_code(self, request: CodeSearchRequest | None = None) -> CodeSearchResponse:
-        return self._request("POST", "/api/code/search", request or {})
+        return self._request("POST", "/code/search", request or {})
 
     # ========================================================================
     # Structured Memory
     # ========================================================================
 
     def upsert_structured_memory(self, request: StructuredMemoryUpsertRequest) -> None:
-        self._request("POST", "/api/structured-memory", request)
+        self._request("POST", "/structured-memory", request)
 
     def list_structured_memory(self, prefix: str | None = None) -> StructuredMemoryListResponse:
         qs = f"?prefix={quote(prefix)}" if prefix else ""
-        return self._request("GET", f"/api/structured-memory{qs}")
+        return self._request("GET", f"/structured-memory{qs}")
 
     def get_structured_memory(self, key: str) -> StructuredMemoryGetResponse:
-        return self._request("GET", f"/api/structured-memory/{quote(key)}")
+        return self._request("GET", f"/structured-memory/{quote(key)}")
 
     def delete_structured_memory(self, key: str) -> StructuredMemoryDeleteResponse:
-        return self._request("DELETE", f"/api/structured-memory/{quote(key)}")
+        return self._request("DELETE", f"/structured-memory/{quote(key)}")
 
     def append_ledger_entry(self, key: str, entry: LedgerAppendRequest) -> LedgerAppendResponse:
-        return self._request("POST", f"/api/structured-memory/ledger/{quote(key)}/append", entry)
+        return self._request("POST", f"/structured-memory/ledger/{quote(key)}/append", entry)
 
     def get_ledger_balance(self, key: str) -> LedgerBalanceResponse:
-        return self._request("GET", f"/api/structured-memory/ledger/{quote(key)}/balance")
+        return self._request("GET", f"/structured-memory/ledger/{quote(key)}/balance")
 
     def transition_state(self, key: str, request: StateTransitionRequest) -> StateTransitionResponse:
-        return self._request("POST", f"/api/structured-memory/state/{quote(key)}/transition", request)
+        return self._request("POST", f"/structured-memory/state/{quote(key)}/transition", request)
 
     def get_current_state(self, key: str) -> StateCurrentResponse:
-        return self._request("GET", f"/api/structured-memory/state/{quote(key)}/current")
+        return self._request("GET", f"/structured-memory/state/{quote(key)}/current")
 
     def update_preference(self, key: str, request: PreferenceUpdateRequest) -> PreferenceUpdateResponse:
-        return self._request("POST", f"/api/structured-memory/preference/{quote(key)}/update", request)
+        return self._request("POST", f"/structured-memory/preference/{quote(key)}/update", request)
 
     def add_tree_child(self, key: str, request: TreeAddChildRequest) -> TreeAddChildResponse:
-        return self._request("POST", f"/api/structured-memory/tree/{quote(key)}/add-child", request)
+        return self._request("POST", f"/structured-memory/tree/{quote(key)}/add-child", request)
 
     # ========================================================================
     # MinnsQL
     # ========================================================================
 
     def execute_query(self, query: str, group_id: str | None = None) -> MinnsQLResponse:
-        return self._request("POST", "/api/query", strip_none({
+        return self._request("POST", "/query", strip_none({
             "query": query, "group_id": group_id,
         }))
 
@@ -745,47 +745,47 @@ class MinnsClient:
     # ========================================================================
 
     def create_subscription(self, query: str, group_id: str | None = None) -> SubscriptionCreateResponse:
-        return self._request("POST", "/api/subscriptions", strip_none({
+        return self._request("POST", "/subscriptions", strip_none({
             "query": query, "group_id": group_id,
         }))
 
     def list_subscriptions(self) -> SubscriptionListResponse:
-        return self._request("GET", "/api/subscriptions")
+        return self._request("GET", "/subscriptions")
 
     def poll_subscription(self, subscription_id: str | int) -> SubscriptionPollResponse:
-        return self._request("GET", f"/api/subscriptions/{subscription_id}/poll")
+        return self._request("GET", f"/subscriptions/{subscription_id}/poll")
 
     def delete_subscription(self, subscription_id: str | int) -> SubscriptionDeleteResponse:
-        return self._request("DELETE", f"/api/subscriptions/{subscription_id}")
+        return self._request("DELETE", f"/subscriptions/{subscription_id}")
 
     # ========================================================================
     # Temporal Tables
     # ========================================================================
 
     def create_table(self, request: TableCreateRequest) -> TableCreateResponse:
-        return self._request("POST", "/api/tables", request)
+        return self._request("POST", "/tables", request)
 
     def list_tables(self) -> List[TableSchema]:
-        return self._request("GET", "/api/tables")
+        return self._request("GET", "/tables")
 
     def get_table_schema(self, name: str) -> TableSchema:
-        return self._request("GET", f"/api/tables/{quote(name)}/schema")
+        return self._request("GET", f"/tables/{quote(name)}/schema")
 
     def drop_table(self, name: str) -> TableDropResponse:
-        return self._request("DELETE", f"/api/tables/{quote(name)}")
+        return self._request("DELETE", f"/tables/{quote(name)}")
 
     def insert_rows(
         self,
         table: str,
         rows: TableRowInsertRequest | List[TableRowInsertRequest],
     ) -> TableRowInsertResponse | List[TableRowInsertResponse]:
-        return self._request("POST", f"/api/tables/{quote(table)}/rows", rows)
+        return self._request("POST", f"/tables/{quote(table)}/rows", rows)
 
     def update_row(self, table: str, row_id: int, request: TableRowUpdateRequest) -> TableRowUpdateResponse:
-        return self._request("PUT", f"/api/tables/{quote(table)}/rows/{row_id}", request)
+        return self._request("PUT", f"/tables/{quote(table)}/rows/{row_id}", request)
 
     def delete_row(self, table: str, row_id: int) -> TableRowDeleteResponse:
-        return self._request("DELETE", f"/api/tables/{quote(table)}/rows/{row_id}")
+        return self._request("DELETE", f"/tables/{quote(table)}/rows/{row_id}")
 
     def scan_rows(self, table: str, query: TableRowScanQuery | None = None) -> TableRowScanResponse:
         params: Dict[str, str] = {}
@@ -795,24 +795,24 @@ class MinnsClient:
                 if v is not None:
                     params[k] = str(v)
         qs = f"?{urlencode(params)}" if params else ""
-        return self._request("GET", f"/api/tables/{quote(table)}/rows{qs}")
+        return self._request("GET", f"/tables/{quote(table)}/rows{qs}")
 
     def get_rows_by_node(self, table: str, node_id: int, group_id: int | None = None) -> TableRowScanResponse:
         qs = f"?group_id={group_id}" if group_id is not None else ""
-        return self._request("GET", f"/api/tables/{quote(table)}/by-node/{node_id}{qs}")
+        return self._request("GET", f"/tables/{quote(table)}/by-node/{node_id}{qs}")
 
     def compact_table(self, table: str) -> TableCompactResponse:
-        return self._request("POST", f"/api/tables/{quote(table)}/compact")
+        return self._request("POST", f"/tables/{quote(table)}/compact")
 
     def get_table_stats(self, table: str) -> TableStatsResponse:
-        return self._request("GET", f"/api/tables/{quote(table)}/stats")
+        return self._request("GET", f"/tables/{quote(table)}/stats")
 
     # ========================================================================
     # Workflows
     # ========================================================================
 
     def create_workflow(self, request: WorkflowCreateRequest) -> WorkflowCreateResponse:
-        return self._request("POST", "/api/workflows", request)
+        return self._request("POST", "/workflows", request)
 
     def list_workflows(
         self, *, group_id: str | None = None, limit: int | None = None,
@@ -823,16 +823,16 @@ class MinnsClient:
         if limit is not None:
             params["limit"] = str(limit)
         qs = f"?{urlencode(params)}" if params else ""
-        return self._request("GET", f"/api/workflows{qs}")
+        return self._request("GET", f"/workflows{qs}")
 
     def get_workflow(self, workflow_id: str | int) -> WorkflowDetailResponse:
-        return self._request("GET", f"/api/workflows/{workflow_id}")
+        return self._request("GET", f"/workflows/{workflow_id}")
 
     def update_workflow(self, workflow_id: str | int, request: WorkflowUpdateRequest) -> WorkflowUpdateResponse:
-        return self._request("PUT", f"/api/workflows/{workflow_id}", request)
+        return self._request("PUT", f"/workflows/{workflow_id}", request)
 
     def delete_workflow(self, workflow_id: str | int) -> WorkflowDeleteResponse:
-        return self._request("DELETE", f"/api/workflows/{workflow_id}")
+        return self._request("DELETE", f"/workflows/{workflow_id}")
 
     def transition_workflow_step(
         self,
@@ -841,117 +841,117 @@ class MinnsClient:
         request: WorkflowStepTransitionRequest,
     ) -> WorkflowStepTransitionResponse:
         return self._request(
-            "POST", f"/api/workflows/{workflow_id}/steps/{quote(step_id)}/transition", request
+            "POST", f"/workflows/{workflow_id}/steps/{quote(step_id)}/transition", request
         )
 
     def add_workflow_feedback(
         self, workflow_id: str | int, request: WorkflowFeedbackRequest,
     ) -> WorkflowFeedbackResponse:
-        return self._request("POST", f"/api/workflows/{workflow_id}/feedback", request)
+        return self._request("POST", f"/workflows/{workflow_id}/feedback", request)
 
     # ========================================================================
     # Agent Registry
     # ========================================================================
 
     def register_agent(self, request: AgentRegisterRequest) -> AgentRegisterResponse:
-        return self._request("POST", "/api/agents/register", request)
+        return self._request("POST", "/agents/register", request)
 
     def list_agents(self, group_id: str) -> AgentListResponse:
-        return self._request("GET", f"/api/agents?{urlencode({'group_id': group_id})}")
+        return self._request("GET", f"/agents?{urlencode({'group_id': group_id})}")
 
     # ========================================================================
     # Ontology Evolution
     # ========================================================================
 
     def get_ontology_properties(self) -> OntologyPropertiesResponse:
-        return self._request("GET", "/api/ontology/properties")
+        return self._request("GET", "/ontology/properties")
 
     def upload_ontology(self, ttl: str) -> OntologyUploadResponse:
-        return self._request("POST", "/api/ontology/upload", {"ttl": ttl})
+        return self._request("POST", "/ontology/upload", {"ttl": ttl})
 
     def discover_ontology(self) -> OntologyDiscoverResponse:
-        return self._request("POST", "/api/ontology/discover")
+        return self._request("POST", "/ontology/discover")
 
     def infer_ontology_cascades(self) -> OntologyCascadeInferenceResponse:
-        return self._request("POST", "/api/ontology/cascade-inference")
+        return self._request("POST", "/ontology/cascade-inference")
 
     def get_ontology_observations(self) -> OntologyObservationsResponse:
-        return self._request("GET", "/api/ontology/observations")
+        return self._request("GET", "/ontology/observations")
 
     def get_ontology_proposals(self) -> OntologyProposalsResponse:
-        return self._request("GET", "/api/ontology/proposals")
+        return self._request("GET", "/ontology/proposals")
 
     def get_ontology_proposal(self, proposal_id: str | int) -> OntologyProposal:
-        return self._request("GET", f"/api/ontology/proposals/{proposal_id}")
+        return self._request("GET", f"/ontology/proposals/{proposal_id}")
 
     def approve_ontology_proposal(self, proposal_id: str | int) -> OntologyProposalApproveResponse:
-        return self._request("POST", f"/api/ontology/proposals/{proposal_id}/approve")
+        return self._request("POST", f"/ontology/proposals/{proposal_id}/approve")
 
     def reject_ontology_proposal(self, proposal_id: str | int) -> OntologyProposalRejectResponse:
-        return self._request("POST", f"/api/ontology/proposals/{proposal_id}/reject")
+        return self._request("POST", f"/ontology/proposals/{proposal_id}/reject")
 
     def get_ontology_stats(self) -> OntologyStatsResponse:
-        return self._request("GET", "/api/ontology/stats")
+        return self._request("GET", "/ontology/stats")
 
     # ========================================================================
     # WASM Modules
     # ========================================================================
 
     def upload_module(self, request: ModuleUploadRequest) -> ModuleUploadResponse:
-        return self._request("POST", "/api/modules", request)
+        return self._request("POST", "/modules", request)
 
     def list_modules(self) -> List[ModuleInfo]:
-        return self._request("GET", "/api/modules")
+        return self._request("GET", "/modules")
 
     def get_module(self, name: str) -> ModuleDetailResponse:
-        return self._request("GET", f"/api/modules/{quote(name)}")
+        return self._request("GET", f"/modules/{quote(name)}")
 
     def delete_module(self, name: str) -> ModuleDeleteResponse:
-        return self._request("DELETE", f"/api/modules/{quote(name)}")
+        return self._request("DELETE", f"/modules/{quote(name)}")
 
     def call_module_function(
         self, module_name: str, function_name: str, args_base64: str | None = None,
     ) -> ModuleCallResponse:
         body = {"args_base64": args_base64} if args_base64 else None
         return self._request(
-            "POST", f"/api/modules/{quote(module_name)}/call/{quote(function_name)}", body,
+            "POST", f"/modules/{quote(module_name)}/call/{quote(function_name)}", body,
         )
 
     def enable_module(self, name: str) -> None:
-        self._request("PUT", f"/api/modules/{quote(name)}/enable")
+        self._request("PUT", f"/modules/{quote(name)}/enable")
 
     def disable_module(self, name: str) -> None:
-        self._request("PUT", f"/api/modules/{quote(name)}/disable")
+        self._request("PUT", f"/modules/{quote(name)}/disable")
 
     def get_module_usage(self, name: str) -> ModuleUsageResponse:
-        return self._request("GET", f"/api/modules/{quote(name)}/usage")
+        return self._request("GET", f"/modules/{quote(name)}/usage")
 
     def reset_module_usage(self, name: str) -> ModuleUsageResetResponse:
-        return self._request("POST", f"/api/modules/{quote(name)}/usage/reset")
+        return self._request("POST", f"/modules/{quote(name)}/usage/reset")
 
     def list_module_schedules(self, name: str) -> List[ModuleSchedule]:
-        return self._request("GET", f"/api/modules/{quote(name)}/schedules")
+        return self._request("GET", f"/modules/{quote(name)}/schedules")
 
     def create_module_schedule(
         self, module_name: str, request: ModuleScheduleCreateRequest,
     ) -> ModuleScheduleCreateResponse:
-        return self._request("POST", f"/api/modules/{quote(module_name)}/schedules", request)
+        return self._request("POST", f"/modules/{quote(module_name)}/schedules", request)
 
     def delete_module_schedule(self, module_name: str, schedule_id: int) -> ModuleScheduleDeleteResponse:
-        return self._request("DELETE", f"/api/modules/{quote(module_name)}/schedules/{schedule_id}")
+        return self._request("DELETE", f"/modules/{quote(module_name)}/schedules/{schedule_id}")
 
     # ========================================================================
     # Planning & World Model
     # ========================================================================
 
     def generate_strategies(self, request: PlanningStrategiesRequest) -> PlanningStrategiesResponse:
-        return self._request("POST", "/api/planning/strategies", request)
+        return self._request("POST", "/planning/strategies", request)
 
     def generate_actions(self, request: PlanningActionsRequest) -> PlanningActionsResponse:
-        return self._request("POST", "/api/planning/actions", request)
+        return self._request("POST", "/planning/actions", request)
 
     def create_plan(self, request: PlanningPlanRequest) -> PlanningPlanResponse:
-        return self._request("POST", "/api/planning/plan", request)
+        return self._request("POST", "/planning/plan", request)
 
     def plan(self, goal_description: str) -> PlanningPlanResponse:
         """Shorthand — creates a plan from a goal description using client defaults."""
@@ -963,13 +963,13 @@ class MinnsClient:
         })
 
     def start_execution(self, request: PlanningExecuteRequest) -> PlanningExecuteResponse:
-        return self._request("POST", "/api/planning/execute", request)
+        return self._request("POST", "/planning/execute", request)
 
     def validate_event(self, request: PlanningValidateRequest) -> PlanningValidateResponse:
-        return self._request("POST", "/api/planning/validate", request)
+        return self._request("POST", "/planning/validate", request)
 
     def get_world_model_stats(self) -> WorldModelStatsResponse:
-        return self._request("GET", "/api/world-model/stats")
+        return self._request("GET", "/world-model/stats")
 
     # ========================================================================
     # Admin
@@ -977,7 +977,7 @@ class MinnsClient:
 
     def export_database(self) -> bytes:
         """Export entire database as binary."""
-        response = self._http.post("/api/admin/export")
+        response = self._http.post("/admin/export")
         if not response.is_success:
             raise MinnsError(f"Export failed with status {response.status_code}", response.status_code)
         return response.content
@@ -985,7 +985,7 @@ class MinnsClient:
     def import_database(self, data: bytes, mode: str = "replace") -> AdminImportResponse:
         """Import database from binary."""
         response = self._http.post(
-            f"/api/admin/import?mode={mode}",
+            f"/admin/import?mode={mode}",
             content=data,
             headers={"Content-Type": "application/octet-stream"},
         )
@@ -998,13 +998,13 @@ class MinnsClient:
     # ========================================================================
 
     def create_api_key(self, request: ApiKeyCreateRequest) -> ApiKeyCreateResponse:
-        return self._request("POST", "/api/keys", request)
+        return self._request("POST", "/keys", request)
 
     def list_api_keys(self) -> List[ApiKeyInfo]:
-        return self._request("GET", "/api/keys")
+        return self._request("GET", "/keys")
 
     def delete_api_key(self, name: str) -> ApiKeyDeleteResponse:
-        return self._request("DELETE", f"/api/keys/{quote(name)}")
+        return self._request("DELETE", f"/keys/{quote(name)}")
 
     # ========================================================================
     # PAL helpers
@@ -1345,14 +1345,14 @@ class AsyncMinnsClient:
             if len(self._event_buffer) >= self._batch_max_size:
                 await self._flush_events(enable_semantic=enable_semantic)
             return MinnsClient._local_ack(str(event.get("id", "queued")), True)
-        return await self._request("POST", "/api/events", strip_none({"event": event, "enable_semantic": enable_semantic}))
+        return await self._request("POST", "/events", strip_none({"event": event, "enable_semantic": enable_semantic}))
 
     async def process_events(self, events: Sequence[Event], *, enable_semantic: bool | None = None) -> ProcessEventResponse:
         if not events:
             return MinnsClient._local_ack("empty", False)
         for i in range(0, len(events), self._batch_max_size):
             chunk = events[i : i + self._batch_max_size]
-            await self._request("POST", "/api/events/batch", strip_none({"events": list(chunk), "enable_semantic": enable_semantic}))
+            await self._request("POST", "/events/batch", strip_none({"events": list(chunk), "enable_semantic": enable_semantic}))
         return MinnsClient._local_ack("batch", False)
 
     async def flush(self, *, enable_semantic: bool | None = None) -> None:
@@ -1370,13 +1370,13 @@ class AsyncMinnsClient:
             self._emit_telemetry({"type": "error", "error": str(exc), "metadata": {"count": len(to_send)}})
 
     async def get_events(self, limit: int = 10) -> List[Event]:
-        return await self._request("GET", f"/api/events?limit={limit}")
+        return await self._request("GET", f"/events?limit={limit}")
 
     async def send_simple_event(self, request: SimpleEventRequest) -> ProcessEventResponse:
-        return await self._request("POST", "/api/events/simple", request)
+        return await self._request("POST", "/events/simple", request)
 
     async def send_state_change_event(self, request: StateChangeEventRequest) -> ProcessEventResponse:
-        return await self._request("POST", "/api/events/state-change", request)
+        return await self._request("POST", "/events/state-change", request)
 
     async def send_transaction_event(self, request: TransactionEventRequest) -> ProcessEventResponse:
         body = dict(request)
@@ -1384,34 +1384,34 @@ class AsyncMinnsClient:
             body["from"] = body.pop("from_entity")
         if "to_entity" in body:
             body["to"] = body.pop("to_entity")
-        return await self._request("POST", "/api/events/transaction", body)
+        return await self._request("POST", "/events/transaction", body)
 
     async def get_episodes(self, limit: int = 10) -> List[EpisodeResponse]:
-        return await self._request("GET", f"/api/episodes?limit={limit}")
+        return await self._request("GET", f"/episodes?limit={limit}")
 
     async def get_agent_memories(self, agent_id: AgentId, limit: int = 10) -> List[MemoryResponse]:
-        return await self._request("GET", f"/api/memories/agent/{agent_id}?limit={limit}")
+        return await self._request("GET", f"/memories/agent/{agent_id}?limit={limit}")
 
     async def get_context_memories(self, context: EventContext, *, limit: int = 10, min_similarity: float | None = None, agent_id: AgentId | None = None, session_id: SessionId | None = None) -> List[MemoryResponse]:
-        return await self._request("POST", "/api/memories/context", strip_none({"context": context, "limit": limit, "min_similarity": min_similarity, "agent_id": agent_id, "session_id": session_id}))
+        return await self._request("POST", "/memories/context", strip_none({"context": context, "limit": limit, "min_similarity": min_similarity, "agent_id": agent_id, "session_id": session_id}))
 
     async def get_agent_strategies(self, agent_id: AgentId, limit: int = 10) -> List[StrategyResponse]:
-        return await self._request("GET", f"/api/strategies/agent/{agent_id}?limit={limit}")
+        return await self._request("GET", f"/strategies/agent/{agent_id}?limit={limit}")
 
     async def get_similar_strategies(self, request: StrategySimilarityRequest) -> List[SimilarStrategyResponse]:
-        return await self._request("POST", "/api/strategies/similar", request)
+        return await self._request("POST", "/strategies/similar", request)
 
     async def get_action_suggestions(self, context_hash: ContextHash, last_action_node: int | None = None, limit: int = 5) -> List[Any]:
         params: Dict[str, str] = {"context_hash": str(context_hash), "limit": str(limit)}
         if last_action_node is not None:
             params["last_action_node"] = str(last_action_node)
-        return await self._request("GET", f"/api/suggestions?{urlencode(params)}")
+        return await self._request("GET", f"/suggestions?{urlencode(params)}")
 
     async def health_check(self) -> HealthResponse:
-        return await self._request("GET", "/api/health")
+        return await self._request("GET", "/health")
 
     async def get_stats(self) -> StatsResponse:
-        return await self._request("GET", "/api/stats")
+        return await self._request("GET", "/stats")
 
     async def get_claims(self, *, limit: int | None = None, event_id: UInt64 | None = None) -> List[ClaimResponse]:
         params: Dict[str, str] = {}
@@ -1420,25 +1420,25 @@ class AsyncMinnsClient:
         if event_id is not None:
             params["event_id"] = str(event_id)
         qs = f"?{urlencode(params)}" if params else ""
-        return await self._request("GET", f"/api/claims{qs}")
+        return await self._request("GET", f"/claims{qs}")
 
     async def get_claim_by_id(self, claim_id: UInt64) -> ClaimResponse:
-        return await self._request("GET", f"/api/claims/{claim_id}")
+        return await self._request("GET", f"/claims/{claim_id}")
 
     async def search_claims(self, request: ClaimSearchRequest) -> ClaimSearchResponse:
-        return await self._request("POST", "/api/claims/search", request)
+        return await self._request("POST", "/claims/search", request)
 
     async def process_embeddings(self, limit: int | None = None) -> EmbeddingsProcessResponse:
         qs = f"?limit={limit}" if limit is not None else ""
-        return await self._request("POST", f"/api/embeddings/process{qs}")
+        return await self._request("POST", f"/embeddings/process{qs}")
 
     async def search(self, query: str | SearchRequest) -> SearchResponse:
         payload: SearchRequest = {"query": query, "mode": "hybrid"} if isinstance(query, str) else query
-        return await self._request("POST", "/api/search", payload)
+        return await self._request("POST", "/search", payload)
 
     async def query(self, question: str | NLQRequest) -> NLQResponse:
         payload: NLQRequest = {"question": question} if isinstance(question, str) else question
-        return await self._request("POST", "/api/nlq", payload)
+        return await self._request("POST", "/nlq", payload)
 
     async def nlq(self, question: str | NLQRequest) -> NLQResponse:
         return await self.query(question)
@@ -1451,7 +1451,7 @@ class AsyncMinnsClient:
                 if v is not None:
                     params[k] = str(v)
         qs = f"?{urlencode(params)}" if params else ""
-        return await self._request("GET", f"/api/graph{qs}")
+        return await self._request("GET", f"/graph{qs}")
 
     async def get_graph_by_context(self, query: GraphContextQuery) -> GraphResponse:
         params: Dict[str, str] = {"context_hash": str(query["context_hash"])}
@@ -1459,10 +1459,10 @@ class AsyncMinnsClient:
             v = query.get(k)  # type: ignore[literal-required]
             if v is not None:
                 params[k] = str(v)
-        return await self._request("GET", f"/api/graph/context?{urlencode(params)}")
+        return await self._request("GET", f"/graph/context?{urlencode(params)}")
 
     async def query_graph_nodes(self, request: GraphNodeQueryRequest) -> GraphNodeQueryResponse:
-        return await self._request("POST", "/api/graph/query", request)
+        return await self._request("POST", "/graph/query", request)
 
     async def traverse_graph(self, query: GraphTraverseQuery) -> GraphTraverseResponse:
         params: Dict[str, str] = {"start": query["start"]}
@@ -1470,24 +1470,24 @@ class AsyncMinnsClient:
             params["max_depth"] = str(query["max_depth"])
         if "node_types" in query:
             params["node_types"] = ",".join(query["node_types"])
-        return await self._request("GET", f"/api/graph/traverse?{urlencode(params)}")
+        return await self._request("GET", f"/graph/traverse?{urlencode(params)}")
 
     async def persist_graph(self) -> GraphPersistResponse:
-        return await self._request("POST", "/api/graph/persist")
+        return await self._request("POST", "/graph/persist")
 
     async def import_graph(self, request: GraphImportRequest) -> GraphImportResponse:
-        return await self._request("POST", "/api/graph/import", request)
+        return await self._request("POST", "/graph/import", request)
 
     async def get_analytics(self) -> AnalyticsResponse:
-        return await self._request("GET", "/api/analytics")
+        return await self._request("GET", "/analytics")
 
     async def get_communities(self, algorithm: str | None = None) -> CommunityDetectionResponse:
         qs = f"?algorithm={algorithm}" if algorithm else ""
-        return await self._request("GET", f"/api/communities{qs}")
+        return await self._request("GET", f"/communities{qs}")
 
     async def get_centrality(self, limit: int | None = None) -> CentralityResponse:
         qs = f"?limit={limit}" if limit is not None else ""
-        return await self._request("GET", f"/api/centrality{qs}")
+        return await self._request("GET", f"/centrality{qs}")
 
     async def get_personalized_page_rank(self, source_node_id: int, *, limit: int | None = None, min_score: float | None = None) -> PPRResponse:
         params: Dict[str, str] = {"source_node_id": str(source_node_id)}
@@ -1495,7 +1495,7 @@ class AsyncMinnsClient:
             params["limit"] = str(limit)
         if min_score is not None:
             params["min_score"] = str(min_score)
-        return await self._request("GET", f"/api/ppr?{urlencode(params)}")
+        return await self._request("GET", f"/ppr?{urlencode(params)}")
 
     async def get_reachability(self, source: int, *, max_hops: int | None = None, max_results: int | None = None) -> ReachabilityResponse:
         params: Dict[str, str] = {"source": str(source)}
@@ -1503,95 +1503,95 @@ class AsyncMinnsClient:
             params["max_hops"] = str(max_hops)
         if max_results is not None:
             params["max_results"] = str(max_results)
-        return await self._request("GET", f"/api/reachability?{urlencode(params)}")
+        return await self._request("GET", f"/reachability?{urlencode(params)}")
 
     async def get_causal_path(self, source: int, target: int) -> CausalPathResponse:
-        return await self._request("GET", f"/api/causal-path?{urlencode({'source': source, 'target': target})}")
+        return await self._request("GET", f"/causal-path?{urlencode({'source': source, 'target': target})}")
 
     async def get_index_stats(self) -> List[IndexStatsResponse]:
-        return await self._request("GET", "/api/indexes")
+        return await self._request("GET", "/indexes")
 
     async def ingest_conversations(self, request: ConversationIngestRequest) -> ConversationIngestResponse:
-        return await self._request("POST", "/api/conversations/ingest", request)
+        return await self._request("POST", "/conversations/ingest", request)
 
     async def send_message(self, request: MessageRequest) -> MessageResponse:
-        return await self._request("POST", "/api/messages", request)
+        return await self._request("POST", "/messages", request)
 
     async def send_code_file_event(self, request: CodeFileEventRequest) -> ProcessEventResponse:
-        return await self._request("POST", "/api/events/code-file", request)
+        return await self._request("POST", "/events/code-file", request)
 
     async def send_code_review_event(self, request: CodeReviewEventRequest) -> ProcessEventResponse:
-        return await self._request("POST", "/api/events/code-review", request)
+        return await self._request("POST", "/events/code-review", request)
 
     async def search_code(self, request: CodeSearchRequest | None = None) -> CodeSearchResponse:
-        return await self._request("POST", "/api/code/search", request or {})
+        return await self._request("POST", "/code/search", request or {})
 
     async def upsert_structured_memory(self, request: StructuredMemoryUpsertRequest) -> None:
-        await self._request("POST", "/api/structured-memory", request)
+        await self._request("POST", "/structured-memory", request)
 
     async def list_structured_memory(self, prefix: str | None = None) -> StructuredMemoryListResponse:
         qs = f"?prefix={quote(prefix)}" if prefix else ""
-        return await self._request("GET", f"/api/structured-memory{qs}")
+        return await self._request("GET", f"/structured-memory{qs}")
 
     async def get_structured_memory(self, key: str) -> StructuredMemoryGetResponse:
-        return await self._request("GET", f"/api/structured-memory/{quote(key)}")
+        return await self._request("GET", f"/structured-memory/{quote(key)}")
 
     async def delete_structured_memory(self, key: str) -> StructuredMemoryDeleteResponse:
-        return await self._request("DELETE", f"/api/structured-memory/{quote(key)}")
+        return await self._request("DELETE", f"/structured-memory/{quote(key)}")
 
     async def append_ledger_entry(self, key: str, entry: LedgerAppendRequest) -> LedgerAppendResponse:
-        return await self._request("POST", f"/api/structured-memory/ledger/{quote(key)}/append", entry)
+        return await self._request("POST", f"/structured-memory/ledger/{quote(key)}/append", entry)
 
     async def get_ledger_balance(self, key: str) -> LedgerBalanceResponse:
-        return await self._request("GET", f"/api/structured-memory/ledger/{quote(key)}/balance")
+        return await self._request("GET", f"/structured-memory/ledger/{quote(key)}/balance")
 
     async def transition_state(self, key: str, request: StateTransitionRequest) -> StateTransitionResponse:
-        return await self._request("POST", f"/api/structured-memory/state/{quote(key)}/transition", request)
+        return await self._request("POST", f"/structured-memory/state/{quote(key)}/transition", request)
 
     async def get_current_state(self, key: str) -> StateCurrentResponse:
-        return await self._request("GET", f"/api/structured-memory/state/{quote(key)}/current")
+        return await self._request("GET", f"/structured-memory/state/{quote(key)}/current")
 
     async def update_preference(self, key: str, request: PreferenceUpdateRequest) -> PreferenceUpdateResponse:
-        return await self._request("POST", f"/api/structured-memory/preference/{quote(key)}/update", request)
+        return await self._request("POST", f"/structured-memory/preference/{quote(key)}/update", request)
 
     async def add_tree_child(self, key: str, request: TreeAddChildRequest) -> TreeAddChildResponse:
-        return await self._request("POST", f"/api/structured-memory/tree/{quote(key)}/add-child", request)
+        return await self._request("POST", f"/structured-memory/tree/{quote(key)}/add-child", request)
 
     async def execute_query(self, query: str, group_id: str | None = None) -> MinnsQLResponse:
-        return await self._request("POST", "/api/query", strip_none({"query": query, "group_id": group_id}))
+        return await self._request("POST", "/query", strip_none({"query": query, "group_id": group_id}))
 
     async def create_subscription(self, query: str, group_id: str | None = None) -> SubscriptionCreateResponse:
-        return await self._request("POST", "/api/subscriptions", strip_none({"query": query, "group_id": group_id}))
+        return await self._request("POST", "/subscriptions", strip_none({"query": query, "group_id": group_id}))
 
     async def list_subscriptions(self) -> SubscriptionListResponse:
-        return await self._request("GET", "/api/subscriptions")
+        return await self._request("GET", "/subscriptions")
 
     async def poll_subscription(self, subscription_id: str | int) -> SubscriptionPollResponse:
-        return await self._request("GET", f"/api/subscriptions/{subscription_id}/poll")
+        return await self._request("GET", f"/subscriptions/{subscription_id}/poll")
 
     async def delete_subscription(self, subscription_id: str | int) -> SubscriptionDeleteResponse:
-        return await self._request("DELETE", f"/api/subscriptions/{subscription_id}")
+        return await self._request("DELETE", f"/subscriptions/{subscription_id}")
 
     async def create_table(self, request: TableCreateRequest) -> TableCreateResponse:
-        return await self._request("POST", "/api/tables", request)
+        return await self._request("POST", "/tables", request)
 
     async def list_tables(self) -> List[TableSchema]:
-        return await self._request("GET", "/api/tables")
+        return await self._request("GET", "/tables")
 
     async def get_table_schema(self, name: str) -> TableSchema:
-        return await self._request("GET", f"/api/tables/{quote(name)}/schema")
+        return await self._request("GET", f"/tables/{quote(name)}/schema")
 
     async def drop_table(self, name: str) -> TableDropResponse:
-        return await self._request("DELETE", f"/api/tables/{quote(name)}")
+        return await self._request("DELETE", f"/tables/{quote(name)}")
 
     async def insert_rows(self, table: str, rows: TableRowInsertRequest | List[TableRowInsertRequest]) -> TableRowInsertResponse | List[TableRowInsertResponse]:
-        return await self._request("POST", f"/api/tables/{quote(table)}/rows", rows)
+        return await self._request("POST", f"/tables/{quote(table)}/rows", rows)
 
     async def update_row(self, table: str, row_id: int, request: TableRowUpdateRequest) -> TableRowUpdateResponse:
-        return await self._request("PUT", f"/api/tables/{quote(table)}/rows/{row_id}", request)
+        return await self._request("PUT", f"/tables/{quote(table)}/rows/{row_id}", request)
 
     async def delete_row(self, table: str, row_id: int) -> TableRowDeleteResponse:
-        return await self._request("DELETE", f"/api/tables/{quote(table)}/rows/{row_id}")
+        return await self._request("DELETE", f"/tables/{quote(table)}/rows/{row_id}")
 
     async def scan_rows(self, table: str, query: TableRowScanQuery | None = None) -> TableRowScanResponse:
         params: Dict[str, str] = {}
@@ -1601,20 +1601,20 @@ class AsyncMinnsClient:
                 if v is not None:
                     params[k] = str(v)
         qs = f"?{urlencode(params)}" if params else ""
-        return await self._request("GET", f"/api/tables/{quote(table)}/rows{qs}")
+        return await self._request("GET", f"/tables/{quote(table)}/rows{qs}")
 
     async def get_rows_by_node(self, table: str, node_id: int, group_id: int | None = None) -> TableRowScanResponse:
         qs = f"?group_id={group_id}" if group_id is not None else ""
-        return await self._request("GET", f"/api/tables/{quote(table)}/by-node/{node_id}{qs}")
+        return await self._request("GET", f"/tables/{quote(table)}/by-node/{node_id}{qs}")
 
     async def compact_table(self, table: str) -> TableCompactResponse:
-        return await self._request("POST", f"/api/tables/{quote(table)}/compact")
+        return await self._request("POST", f"/tables/{quote(table)}/compact")
 
     async def get_table_stats(self, table: str) -> TableStatsResponse:
-        return await self._request("GET", f"/api/tables/{quote(table)}/stats")
+        return await self._request("GET", f"/tables/{quote(table)}/stats")
 
     async def create_workflow(self, request: WorkflowCreateRequest) -> WorkflowCreateResponse:
-        return await self._request("POST", "/api/workflows", request)
+        return await self._request("POST", "/workflows", request)
 
     async def list_workflows(self, *, group_id: str | None = None, limit: int | None = None) -> WorkflowListResponse:
         params: Dict[str, str] = {}
@@ -1623,137 +1623,137 @@ class AsyncMinnsClient:
         if limit is not None:
             params["limit"] = str(limit)
         qs = f"?{urlencode(params)}" if params else ""
-        return await self._request("GET", f"/api/workflows{qs}")
+        return await self._request("GET", f"/workflows{qs}")
 
     async def get_workflow(self, workflow_id: str | int) -> WorkflowDetailResponse:
-        return await self._request("GET", f"/api/workflows/{workflow_id}")
+        return await self._request("GET", f"/workflows/{workflow_id}")
 
     async def update_workflow(self, workflow_id: str | int, request: WorkflowUpdateRequest) -> WorkflowUpdateResponse:
-        return await self._request("PUT", f"/api/workflows/{workflow_id}", request)
+        return await self._request("PUT", f"/workflows/{workflow_id}", request)
 
     async def delete_workflow(self, workflow_id: str | int) -> WorkflowDeleteResponse:
-        return await self._request("DELETE", f"/api/workflows/{workflow_id}")
+        return await self._request("DELETE", f"/workflows/{workflow_id}")
 
     async def transition_workflow_step(self, workflow_id: str | int, step_id: str, request: WorkflowStepTransitionRequest) -> WorkflowStepTransitionResponse:
-        return await self._request("POST", f"/api/workflows/{workflow_id}/steps/{quote(step_id)}/transition", request)
+        return await self._request("POST", f"/workflows/{workflow_id}/steps/{quote(step_id)}/transition", request)
 
     async def add_workflow_feedback(self, workflow_id: str | int, request: WorkflowFeedbackRequest) -> WorkflowFeedbackResponse:
-        return await self._request("POST", f"/api/workflows/{workflow_id}/feedback", request)
+        return await self._request("POST", f"/workflows/{workflow_id}/feedback", request)
 
     async def register_agent(self, request: AgentRegisterRequest) -> AgentRegisterResponse:
-        return await self._request("POST", "/api/agents/register", request)
+        return await self._request("POST", "/agents/register", request)
 
     async def list_agents(self, group_id: str) -> AgentListResponse:
-        return await self._request("GET", f"/api/agents?{urlencode({'group_id': group_id})}")
+        return await self._request("GET", f"/agents?{urlencode({'group_id': group_id})}")
 
     async def get_ontology_properties(self) -> OntologyPropertiesResponse:
-        return await self._request("GET", "/api/ontology/properties")
+        return await self._request("GET", "/ontology/properties")
 
     async def upload_ontology(self, ttl: str) -> OntologyUploadResponse:
-        return await self._request("POST", "/api/ontology/upload", {"ttl": ttl})
+        return await self._request("POST", "/ontology/upload", {"ttl": ttl})
 
     async def discover_ontology(self) -> OntologyDiscoverResponse:
-        return await self._request("POST", "/api/ontology/discover")
+        return await self._request("POST", "/ontology/discover")
 
     async def infer_ontology_cascades(self) -> OntologyCascadeInferenceResponse:
-        return await self._request("POST", "/api/ontology/cascade-inference")
+        return await self._request("POST", "/ontology/cascade-inference")
 
     async def get_ontology_observations(self) -> OntologyObservationsResponse:
-        return await self._request("GET", "/api/ontology/observations")
+        return await self._request("GET", "/ontology/observations")
 
     async def get_ontology_proposals(self) -> OntologyProposalsResponse:
-        return await self._request("GET", "/api/ontology/proposals")
+        return await self._request("GET", "/ontology/proposals")
 
     async def get_ontology_proposal(self, proposal_id: str | int) -> OntologyProposal:
-        return await self._request("GET", f"/api/ontology/proposals/{proposal_id}")
+        return await self._request("GET", f"/ontology/proposals/{proposal_id}")
 
     async def approve_ontology_proposal(self, proposal_id: str | int) -> OntologyProposalApproveResponse:
-        return await self._request("POST", f"/api/ontology/proposals/{proposal_id}/approve")
+        return await self._request("POST", f"/ontology/proposals/{proposal_id}/approve")
 
     async def reject_ontology_proposal(self, proposal_id: str | int) -> OntologyProposalRejectResponse:
-        return await self._request("POST", f"/api/ontology/proposals/{proposal_id}/reject")
+        return await self._request("POST", f"/ontology/proposals/{proposal_id}/reject")
 
     async def get_ontology_stats(self) -> OntologyStatsResponse:
-        return await self._request("GET", "/api/ontology/stats")
+        return await self._request("GET", "/ontology/stats")
 
     async def upload_module(self, request: ModuleUploadRequest) -> ModuleUploadResponse:
-        return await self._request("POST", "/api/modules", request)
+        return await self._request("POST", "/modules", request)
 
     async def list_modules(self) -> List[ModuleInfo]:
-        return await self._request("GET", "/api/modules")
+        return await self._request("GET", "/modules")
 
     async def get_module(self, name: str) -> ModuleDetailResponse:
-        return await self._request("GET", f"/api/modules/{quote(name)}")
+        return await self._request("GET", f"/modules/{quote(name)}")
 
     async def delete_module(self, name: str) -> ModuleDeleteResponse:
-        return await self._request("DELETE", f"/api/modules/{quote(name)}")
+        return await self._request("DELETE", f"/modules/{quote(name)}")
 
     async def call_module_function(self, module_name: str, function_name: str, args_base64: str | None = None) -> ModuleCallResponse:
         body = {"args_base64": args_base64} if args_base64 else None
-        return await self._request("POST", f"/api/modules/{quote(module_name)}/call/{quote(function_name)}", body)
+        return await self._request("POST", f"/modules/{quote(module_name)}/call/{quote(function_name)}", body)
 
     async def enable_module(self, name: str) -> None:
-        await self._request("PUT", f"/api/modules/{quote(name)}/enable")
+        await self._request("PUT", f"/modules/{quote(name)}/enable")
 
     async def disable_module(self, name: str) -> None:
-        await self._request("PUT", f"/api/modules/{quote(name)}/disable")
+        await self._request("PUT", f"/modules/{quote(name)}/disable")
 
     async def get_module_usage(self, name: str) -> ModuleUsageResponse:
-        return await self._request("GET", f"/api/modules/{quote(name)}/usage")
+        return await self._request("GET", f"/modules/{quote(name)}/usage")
 
     async def reset_module_usage(self, name: str) -> ModuleUsageResetResponse:
-        return await self._request("POST", f"/api/modules/{quote(name)}/usage/reset")
+        return await self._request("POST", f"/modules/{quote(name)}/usage/reset")
 
     async def list_module_schedules(self, name: str) -> List[ModuleSchedule]:
-        return await self._request("GET", f"/api/modules/{quote(name)}/schedules")
+        return await self._request("GET", f"/modules/{quote(name)}/schedules")
 
     async def create_module_schedule(self, module_name: str, request: ModuleScheduleCreateRequest) -> ModuleScheduleCreateResponse:
-        return await self._request("POST", f"/api/modules/{quote(module_name)}/schedules", request)
+        return await self._request("POST", f"/modules/{quote(module_name)}/schedules", request)
 
     async def delete_module_schedule(self, module_name: str, schedule_id: int) -> ModuleScheduleDeleteResponse:
-        return await self._request("DELETE", f"/api/modules/{quote(module_name)}/schedules/{schedule_id}")
+        return await self._request("DELETE", f"/modules/{quote(module_name)}/schedules/{schedule_id}")
 
     async def generate_strategies(self, request: PlanningStrategiesRequest) -> PlanningStrategiesResponse:
-        return await self._request("POST", "/api/planning/strategies", request)
+        return await self._request("POST", "/planning/strategies", request)
 
     async def generate_actions(self, request: PlanningActionsRequest) -> PlanningActionsResponse:
-        return await self._request("POST", "/api/planning/actions", request)
+        return await self._request("POST", "/planning/actions", request)
 
     async def create_plan(self, request: PlanningPlanRequest) -> PlanningPlanResponse:
-        return await self._request("POST", "/api/planning/plan", request)
+        return await self._request("POST", "/planning/plan", request)
 
     async def plan(self, goal_description: str) -> PlanningPlanResponse:
         return await self.create_plan({"goal_description": goal_description, "goal_bucket_id": 0, "context_fingerprint": 0, "session_id": self._default_session_id or 0})
 
     async def start_execution(self, request: PlanningExecuteRequest) -> PlanningExecuteResponse:
-        return await self._request("POST", "/api/planning/execute", request)
+        return await self._request("POST", "/planning/execute", request)
 
     async def validate_event(self, request: PlanningValidateRequest) -> PlanningValidateResponse:
-        return await self._request("POST", "/api/planning/validate", request)
+        return await self._request("POST", "/planning/validate", request)
 
     async def get_world_model_stats(self) -> WorldModelStatsResponse:
-        return await self._request("GET", "/api/world-model/stats")
+        return await self._request("GET", "/world-model/stats")
 
     async def export_database(self) -> bytes:
-        response = await self._http.post("/api/admin/export")
+        response = await self._http.post("/admin/export")
         if not response.is_success:
             raise MinnsError(f"Export failed with status {response.status_code}", response.status_code)
         return response.content
 
     async def import_database(self, data: bytes, mode: str = "replace") -> AdminImportResponse:
-        response = await self._http.post(f"/api/admin/import?mode={mode}", content=data, headers={"Content-Type": "application/octet-stream"})
+        response = await self._http.post(f"/admin/import?mode={mode}", content=data, headers={"Content-Type": "application/octet-stream"})
         if not response.is_success:
             raise MinnsError(f"Import failed with status {response.status_code}", response.status_code)
         return response.json()
 
     async def create_api_key(self, request: ApiKeyCreateRequest) -> ApiKeyCreateResponse:
-        return await self._request("POST", "/api/keys", request)
+        return await self._request("POST", "/keys", request)
 
     async def list_api_keys(self) -> List[ApiKeyInfo]:
-        return await self._request("GET", "/api/keys")
+        return await self._request("GET", "/keys")
 
     async def delete_api_key(self, name: str) -> ApiKeyDeleteResponse:
-        return await self._request("DELETE", f"/api/keys/{quote(name)}")
+        return await self._request("DELETE", f"/keys/{quote(name)}")
 
     async def recall_context(self, agent_id: AgentId, context: EventContext, *, claims_query: str | None = None, memory_limit: int = 5, strategy_limit: int = 5) -> RecallContextResult:
         import asyncio
