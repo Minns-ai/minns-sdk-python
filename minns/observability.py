@@ -10,6 +10,13 @@ This mirrors the agent-forge-sdk ``runtime/`` bridge and the TypeScript
 ``minns-sdk`` ``observability`` module so the wire contract is identical across
 languages.
 
+Telemetry is built on the official OpenTelemetry SDK, exported as OTLP/HTTP
+**protobuf** (the encoding minns-opto accepts). The OTel packages are an
+OPTIONAL dependency, lazy-loaded on first use, so the memory client stays light
+for users who don't emit telemetry. Install to enable::
+
+    pip install "minns-sdk[otel]"
+
 Env rails injected by the deploy (control plane ``agentDeploy.deploy()``)::
 
     MINNS_TELEMETRY_URL    OTLP/HTTP trace ingest (forwarded to opto)
@@ -17,26 +24,14 @@ Env rails injected by the deploy (control plane ``agentDeploy.deploy()``)::
     MINNS_APPROVAL_URL     human-approval request endpoint
     MINNS_PROMPT_URL       current (opto-optimized) prompt/model for this agent
     MINNS_TELEMETRY_TOKEN  per-instance bearer for all of the above
-    MINNS_AGENT_ID         the instance id; tags telemetry as minns.agent.id
-
-Example::
-
-    from minns.observability import init_observability
-
-    obs = init_observability()
-    if obs.telemetry:
-        obs.telemetry.record_gen_ai(
-            system="anthropic", model="claude-opus-4-8",
-            input_tokens=120, output_tokens=40,
-        )
-        obs.telemetry.flush()
+    MINNS_AGENT_ID         the instance id; tags telemetry as minns.agent_id
 """
 
 from __future__ import annotations
 
+import contextlib
+import importlib
 import os
-import secrets
-import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -45,20 +40,11 @@ import httpx
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-#: Standardized OTel resource attribute carrying the agent id, so telemetry is
-#: attributable with or without the env rails.
-AGENT_ID_RESOURCE_ATTR = "minns.agent.id"
+#: Standardized OTel resource attribute carrying the agent id. Matches what the
+#: minns-opto ingest reads, so spans bucket per agent.
+AGENT_ID_RESOURCE_ATTR = "minns.agent_id"
 
 AttrValue = str | int | float | bool
-
-_SPAN_KIND_INTERNAL = 1
-_SPAN_KIND_CLIENT = 3
-_STATUS_OK = 1
-_STATUS_ERROR = 2
-
-# Span kinds re-exported for callers building custom spans.
-SPAN_KIND_INTERNAL = _SPAN_KIND_INTERNAL
-SPAN_KIND_CLIENT = _SPAN_KIND_CLIENT
 
 
 # ── Env rails ────────────────────────────────────────────────────────────────
@@ -97,24 +83,6 @@ def read_minns_env(env: Mapping[str, str] | None = None) -> MinnsRails:
     )
 
 
-# ── OTLP/JSON telemetry ──────────────────────────────────────────────────────
-
-
-def _to_key_value(key: str, value: AttrValue) -> dict[str, Any]:
-    # bool is a subclass of int, so check it first.
-    if isinstance(value, bool):
-        return {"key": key, "value": {"boolValue": value}}
-    if isinstance(value, int):
-        return {"key": key, "value": {"intValue": str(value)}}
-    if isinstance(value, float):
-        return {"key": key, "value": {"doubleValue": value}}
-    return {"key": key, "value": {"stringValue": value}}
-
-
-def _ms_to_nanos(ms: float) -> str:
-    return str(int(ms * 1_000_000))
-
-
 def _bearer(token: str | None) -> dict[str, str]:
     headers = {"Content-Type": "application/json"}
     if token:
@@ -122,10 +90,18 @@ def _bearer(token: str | None) -> dict[str, str]:
     return headers
 
 
+# ── OpenTelemetry trace emission (OTLP protobuf) ─────────────────────────────
+
+
+def _ms_to_ns(ms: float | None) -> int | None:
+    return int(ms * 1_000_000) if ms is not None else None
+
+
 class TelemetryReporter:
-    """Buffers OTLP spans and flushes them to the control plane (OTLP/JSON over
-    httpx — no OpenTelemetry SDK dependency). Every span carries the
-    ``minns.agent.id`` resource attribute."""
+    """Emits OTLP protobuf spans via the official OpenTelemetry SDK. The OTel
+    packages are imported lazily; if they are not installed, every method is a
+    safe no-op (telemetry is always best-effort). Every span carries the
+    ``minns.agent_id`` resource attribute."""
 
     def __init__(
         self,
@@ -139,38 +115,78 @@ class TelemetryReporter:
         self._token = token
         self._agent_id = agent_id
         self._service_name = service_name or agent_id or "minns-agent"
-        # One trace id per reporter; spans share it so they group into a trajectory.
-        self._trace_id = secrets.token_hex(16)
-        self._buffer: list[dict[str, Any]] = []
+        self._provider: Any = None
+        self._tracer: Any = None
+        self._trace_api: Any = None
+        self._init_failed = False
+        self._recorded = 0
+
+    def _ensure(self) -> bool:
+        """Lazily build the tracer provider. Returns False if OTel is unavailable."""
+        if self._tracer is not None:
+            return True
+        if self._init_failed:
+            return False
+        try:
+            # importlib (not `import`) so the optional OTel packages are not a
+            # static/type dependency.
+            sdk_trace = importlib.import_module("opentelemetry.sdk.trace")
+            sdk_export = importlib.import_module("opentelemetry.sdk.trace.export")
+            sdk_resources = importlib.import_module("opentelemetry.sdk.resources")
+            otlp = importlib.import_module(
+                "opentelemetry.exporter.otlp.proto.http.trace_exporter"
+            )
+            self._trace_api = importlib.import_module("opentelemetry.trace")
+
+            attributes: dict[str, Any] = {"service.name": self._service_name}
+            if self._agent_id:
+                attributes[AGENT_ID_RESOURCE_ATTR] = self._agent_id
+            resource = sdk_resources.Resource.create(attributes)
+            exporter = otlp.OTLPSpanExporter(
+                endpoint=self._endpoint,
+                headers={"Authorization": f"Bearer {self._token}"} if self._token else None,
+            )
+            provider = sdk_trace.TracerProvider(resource=resource)
+            provider.add_span_processor(sdk_export.BatchSpanProcessor(exporter))
+            self._provider = provider
+            self._tracer = provider.get_tracer("minns-sdk")
+            return True
+        except Exception:
+            self._init_failed = True
+            return False
 
     def span(
         self,
         name: str,
         *,
-        kind: int = _SPAN_KIND_INTERNAL,
+        kind: str = "internal",
         start_time_ms: float | None = None,
         end_time_ms: float | None = None,
         attributes: dict[str, AttrValue] | None = None,
         error: str | None = None,
     ) -> None:
         """Record a generic span (e.g. a tool call, a unit of work)."""
-        start = start_time_ms if start_time_ms is not None else time.time() * 1000
-        end = end_time_ms if end_time_ms is not None else start
-        status: dict[str, Any] = (
-            {"code": _STATUS_ERROR, "message": error} if error else {"code": _STATUS_OK}
-        )
-        self._buffer.append(
-            {
-                "traceId": self._trace_id,
-                "spanId": secrets.token_hex(8),
-                "name": name,
-                "kind": kind,
-                "startTimeUnixNano": _ms_to_nanos(start),
-                "endTimeUnixNano": _ms_to_nanos(end),
-                "attributes": [_to_key_value(k, v) for k, v in (attributes or {}).items()],
-                "status": status,
-            }
-        )
+        self._recorded += 1
+        if not self._ensure():
+            return
+        # Best-effort: never let telemetry break the run.
+        with contextlib.suppress(Exception):
+            span_kind = (
+                self._trace_api.SpanKind.CLIENT
+                if kind == "client"
+                else self._trace_api.SpanKind.INTERNAL
+            )
+            span = self._tracer.start_span(
+                name,
+                kind=span_kind,
+                start_time=_ms_to_ns(start_time_ms),
+                attributes=attributes or {},
+            )
+            if error:
+                span.set_status(self._trace_api.Status(self._trace_api.StatusCode.ERROR, error))
+            else:
+                span.set_status(self._trace_api.Status(self._trace_api.StatusCode.OK))
+            span.end(end_time=_ms_to_ns(end_time_ms))
 
     def record_gen_ai(
         self,
@@ -199,7 +215,7 @@ class TelemetryReporter:
             attrs["gen_ai.usage.output_tokens"] = output_tokens
         self.span(
             f"{operation} {model}",
-            kind=_SPAN_KIND_CLIENT,
+            kind="client",
             start_time_ms=start_time_ms,
             end_time_ms=end_time_ms,
             attributes=attrs,
@@ -208,36 +224,20 @@ class TelemetryReporter:
 
     @property
     def empty(self) -> bool:
-        """True when nothing is buffered."""
-        return not self._buffer
+        """True when no spans have been recorded yet."""
+        return self._recorded == 0
 
     def flush(self) -> None:
         """Flush buffered spans to the OTLP endpoint. Best-effort; never raises."""
-        if not self._buffer:
-            return
-        spans = self._buffer
-        self._buffer = []
+        if self._provider is not None:
+            with contextlib.suppress(Exception):
+                self._provider.force_flush()
 
-        resource_attributes = [_to_key_value("service.name", self._service_name)]
-        if self._agent_id:
-            resource_attributes.append(_to_key_value(AGENT_ID_RESOURCE_ATTR, self._agent_id))
-
-        payload = {
-            "resourceSpans": [
-                {
-                    "resource": {"attributes": resource_attributes},
-                    "scopeSpans": [
-                        {"scope": {"name": "minns-sdk", "version": "0"}, "spans": spans}
-                    ],
-                }
-            ]
-        }
-        try:
-            with httpx.Client(timeout=10.0) as client:
-                client.post(self._endpoint, json=payload, headers=_bearer(self._token))
-        except Exception:
-            # Telemetry is best-effort: never let an ingest failure break the run.
-            pass
+    def shutdown(self) -> None:
+        """Flush and shut down the exporter (call before the process exits)."""
+        if self._provider is not None:
+            with contextlib.suppress(Exception):
+                self._provider.shutdown()
 
 
 def telemetry_from_rails(rails: MinnsRails) -> TelemetryReporter | None:
@@ -272,11 +272,8 @@ class LogShipper:
             return
         lines = self._buffer
         self._buffer = []
-        try:
-            with httpx.Client(timeout=10.0) as client:
-                client.post(self._endpoint, json={"lines": lines}, headers=_bearer(self._token))
-        except Exception:
-            pass
+        with contextlib.suppress(Exception), httpx.Client(timeout=10.0) as client:
+            client.post(self._endpoint, json={"lines": lines}, headers=_bearer(self._token))
 
 
 def log_shipper_from_rails(rails: MinnsRails) -> LogShipper | None:
