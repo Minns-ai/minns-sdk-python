@@ -15,7 +15,8 @@ Env rails injected by the deploy (control plane ``agentDeploy.deploy()``)::
     MINNS_TELEMETRY_URL    OTLP/HTTP trace ingest (forwarded to opto)
     MINNS_LOGS_URL         log shipping endpoint
     MINNS_APPROVAL_URL     human-approval request endpoint
-    MINNS_TELEMETRY_TOKEN  per-instance bearer for all three
+    MINNS_PROMPT_URL       current (opto-optimized) prompt/model for this agent
+    MINNS_TELEMETRY_TOKEN  per-instance bearer for all of the above
     MINNS_AGENT_ID         the instance id; tags telemetry as minns.agent.id
 
 Example::
@@ -71,6 +72,7 @@ class MinnsRails:
     telemetry_url: str | None = None
     logs_url: str | None = None
     approval_url: str | None = None
+    prompt_url: str | None = None
     token: str | None = None
     agent_id: str | None = None
 
@@ -89,6 +91,7 @@ def read_minns_env(env: Mapping[str, str] | None = None) -> MinnsRails:
         telemetry_url=_clean(source.get("MINNS_TELEMETRY_URL")),
         logs_url=_clean(source.get("MINNS_LOGS_URL")),
         approval_url=_clean(source.get("MINNS_APPROVAL_URL")),
+        prompt_url=_clean(source.get("MINNS_PROMPT_URL")),
         token=_clean(source.get("MINNS_TELEMETRY_TOKEN")),
         agent_id=_clean(source.get("MINNS_AGENT_ID")),
     )
@@ -309,6 +312,51 @@ def request_approval(
         body = response.json()
         approval_id = body.get("approval_id") if isinstance(body, dict) else None
         return approval_id if isinstance(approval_id, str) else None
+    except Exception:
+        return None
+
+
+# ── Prompt delivery (the "in" half of the optimization loop) ─────────────────
+
+
+@dataclass
+class AgentPromptConfig:
+    """The current model config the control plane serves for this agent. The
+    agent emits traces; opto optimizes the prompt in batches; the optimized
+    prompt is served back here. The agent never optimizes its own prompt."""
+
+    prompt: str
+    model: str = ""
+    temperature: float = 0.7
+    max_tokens: int = 1024
+    version: str | None = None
+    updated_at: int | None = None
+
+
+def fetch_agent_prompt(rails: MinnsRails) -> AgentPromptConfig | None:
+    """Fetch the agent's current prompt/model from the control plane
+    (MINNS_PROMPT_URL), authenticated with the per-instance token. Returns
+    ``None`` when not configured or on failure (fall back to built-in defaults).
+    """
+    if not rails.prompt_url:
+        return None
+    try:
+        headers = {"Authorization": f"Bearer {rails.token}"} if rails.token else {}
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(rails.prompt_url, headers=headers)
+        if response.status_code >= 400:
+            return None
+        body = response.json()
+        if not isinstance(body, dict) or not isinstance(body.get("prompt"), str):
+            return None
+        return AgentPromptConfig(
+            prompt=body["prompt"],
+            model=body.get("model", "") if isinstance(body.get("model"), str) else "",
+            temperature=float(body.get("temperature", 0.7)),
+            max_tokens=int(body.get("maxTokens", 1024)),
+            version=body.get("version"),
+            updated_at=body.get("updatedAt"),
+        )
     except Exception:
         return None
 

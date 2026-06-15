@@ -47,10 +47,12 @@ from .intent_sidecar import (
 )
 from .observability import (
     AGENT_ID_RESOURCE_ATTR,
+    AgentPromptConfig,
     LogShipper,
     MinnsRails,
     Observability,
     TelemetryReporter,
+    fetch_agent_prompt,
     init_observability,
     log_shipper_from_rails,
     read_minns_env,
@@ -156,6 +158,8 @@ __all__ = [
     "LogShipper",
     "log_shipper_from_rails",
     "request_approval",
+    "AgentPromptConfig",
+    "fetch_agent_prompt",
     "Observability",
     "init_observability",
 ]
