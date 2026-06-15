@@ -45,6 +45,18 @@ from .intent_sidecar import (
     build_sidecar_instruction,
     extract_intent_and_response,
 )
+from .observability import (
+    AGENT_ID_RESOURCE_ATTR,
+    LogShipper,
+    MinnsRails,
+    Observability,
+    TelemetryReporter,
+    init_observability,
+    log_shipper_from_rails,
+    read_minns_env,
+    request_approval,
+    telemetry_from_rails,
+)
 from .types import (
     # Scalar aliases
     UInt64,
@@ -135,6 +147,17 @@ __all__ = [
     "extract_intent_and_response",
     "build_context_snippet",
     "build_fallback",
+    # Observability (tier-1: "observed by us")
+    "AGENT_ID_RESOURCE_ATTR",
+    "MinnsRails",
+    "read_minns_env",
+    "TelemetryReporter",
+    "telemetry_from_rails",
+    "LogShipper",
+    "log_shipper_from_rails",
+    "request_approval",
+    "Observability",
+    "init_observability",
 ]
 
 __version__ = "0.8.3"
