@@ -330,6 +330,15 @@ class AgentPromptConfig:
     updated_at: int | None = None
 
 
+def _num(value: object, default: float) -> float:
+    """Return ``value`` only when it is a real JSON number, else ``default``.
+    ``bool`` is excluded (it is an ``int`` subclass) so ``true``/``false`` do
+    not slip through as 1/0."""
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    return default
+
+
 def fetch_agent_prompt(rails: MinnsRails) -> AgentPromptConfig | None:
     """Fetch the agent's current prompt/model from the control plane
     (MINNS_PROMPT_URL), authenticated with the per-instance token. Returns
@@ -349,8 +358,15 @@ def fetch_agent_prompt(rails: MinnsRails) -> AgentPromptConfig | None:
         return AgentPromptConfig(
             prompt=body["prompt"],
             model=body.get("model", "") if isinstance(body.get("model"), str) else "",
-            temperature=float(body.get("temperature", 0.7)),
-            max_tokens=int(body.get("maxTokens", 1024)),
+            # Guard structurally like the TS twin (runtime/prompt.ts): a JSON
+            # ``null`` (nullable column) or a string-encoded number would make
+            # ``float(...)``/``int(...)`` raise, and the blanket ``except`` below
+            # would then throw away the whole optimized prompt — silently
+            # defeating the optimization loop. Only accept a real number; else
+            # fall back to the default. ``.get(k, default)`` alone is not enough:
+            # it returns the default only for an ABSENT key, not for ``null``.
+            temperature=_num(body.get("temperature"), 0.7),
+            max_tokens=int(_num(body.get("maxTokens"), 1024)),
             version=body.get("version"),
             updated_at=body.get("updatedAt"),
         )
