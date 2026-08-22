@@ -21,8 +21,6 @@ import random
 from typing import TYPE_CHECKING, Any, Dict, List, Literal
 
 from ._utils import generate_u128_id, get_nanoseconds, to_u128
-
-logger = logging.getLogger(__name__)
 from .types import (
     AgentId,
     CognitiveType,
@@ -36,6 +34,14 @@ from .types import (
     ProcessEventResponse,
     SessionId,
 )
+
+logger = logging.getLogger(__name__)
+
+# asyncio holds only a WEAK reference to a running task, so a fire-and-forget
+# task can be garbage-collected mid-flight and the send vanishes silently —
+# the very failure enqueue() exists to avoid. Keep a strong reference until the
+# task completes.
+_background_sends: set[asyncio.Task[Any]] = set()
 
 if TYPE_CHECKING:
     from .client import AsyncMinnsClient, MinnsClient
@@ -405,6 +411,8 @@ class EventBuilder:
                     queued = False
                 else:
                     task = loop.create_task(result)
+                    # Strong reference until done (see _background_sends above).
+                    _background_sends.add(task)
                     task.add_done_callback(self._log_background_send_failure)
         except Exception:
             queued = False
@@ -413,13 +421,14 @@ class EventBuilder:
     # -- internal -------------------------------------------------------------
 
     @staticmethod
-    def _log_background_send_failure(task: "asyncio.Task[Any]") -> None:
+    def _log_background_send_failure(task: asyncio.Task[Any]) -> None:
         """Report a fire-and-forget send that failed.
 
         Also retrieves the exception, without which asyncio logs a bare
         "exception was never retrieved" at garbage-collection time with no
         indication of which event it belonged to.
         """
+        _background_sends.discard(task)
         if task.cancelled():
             return
         exc = task.exception()
