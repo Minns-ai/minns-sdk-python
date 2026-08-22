@@ -14,7 +14,8 @@ Usage::
 
 from __future__ import annotations
 
-import math
+import asyncio
+import inspect
 import random
 from typing import TYPE_CHECKING, Any, Dict, List, Literal
 
@@ -374,15 +375,42 @@ class EventBuilder:
         return await self._client.process_event(event, enable_semantic=self._enable_semantic)  # type: ignore[misc]
 
     def enqueue(self) -> LocalAck:
-        """Build and fire-and-forget. Returns a local ack immediately."""
+        """Build and fire-and-forget. Returns a local ack immediately.
+
+        With an ASYNC client ``process_event`` returns a coroutine: it is
+        scheduled on the running event loop here. Previously the coroutine was
+        created and dropped un-awaited, so the event never reached the server
+        while this still returned ``success: True`` — a silent data loss. When
+        there is no running loop nothing can drive the send, so that is
+        reported honestly (``success: False``) instead of acked.
+        """
         event = self.build()
         event_id = event.get("id", "queued")
-        # Fire in background — the client will handle errors via telemetry
+        queued = True
         try:
-            self._client.process_event(event, enable_semantic=self._enable_semantic)
+            result = self._client.process_event(
+                event, enable_semantic=self._enable_semantic
+            )
+            if inspect.isawaitable(result):
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    # No running loop: close the coroutine so it does not warn
+                    # about never being awaited, and do not claim it was sent.
+                    if hasattr(result, "close"):
+                        result.close()
+                    queued = False
+                else:
+                    task = loop.create_task(result)
+                    # Retrieve any exception so a failed background send does not
+                    # surface as "exception was never retrieved"; the client
+                    # reports transport errors through its own telemetry.
+                    task.add_done_callback(
+                        lambda t: None if t.cancelled() else t.exception()
+                    )
         except Exception:
-            pass
-        return {"success": True, "queued": True, "event_id": str(event_id)}
+            queued = False
+        return {"success": queued, "queued": queued, "event_id": str(event_id)}
 
     # -- internal -------------------------------------------------------------
 

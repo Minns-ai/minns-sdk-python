@@ -41,6 +41,12 @@ def safe_stringify(obj: Any) -> str:
     Mirrors the TypeScript ``safeStringify`` — strips ``__proto__`` /
     ``constructor`` keys and replaces circular refs with ``"[Circular]"``.
     """
+    # Tracks the ANCESTORS on the current path, not every object ever seen: a
+    # container is removed again once its subtree is written. A visited-set that
+    # only grows reports a merely SHARED object (the same dict appearing twice
+    # side by side — a DAG, not a cycle) as "[Circular]", silently replacing
+    # real request payload with that string. Lists are tracked too, so a
+    # self-referential list raises no RecursionError.
     seen: set[int] = set()
 
     def _default(o: Any) -> Any:
@@ -52,13 +58,23 @@ def safe_stringify(obj: Any) -> str:
             if obj_id in seen:
                 return "[Circular]"
             seen.add(obj_id)
-            return {
-                k: _filter(v)
-                for k, v in obj.items()
-                if k not in ("__proto__", "constructor")
-            }
+            try:
+                return {
+                    k: _filter(v)
+                    for k, v in obj.items()
+                    if k not in ("__proto__", "constructor")
+                }
+            finally:
+                seen.discard(obj_id)
         if isinstance(obj, (list, tuple)):
-            return [_filter(v) for v in obj]
+            obj_id = id(obj)
+            if obj_id in seen:
+                return "[Circular]"
+            seen.add(obj_id)
+            try:
+                return [_filter(v) for v in obj]
+            finally:
+                seen.discard(obj_id)
         return obj
 
     return json.dumps(_filter(obj), default=_default, separators=(",", ":"))
