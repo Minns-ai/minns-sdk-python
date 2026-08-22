@@ -16,10 +16,13 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import random
 from typing import TYPE_CHECKING, Any, Dict, List, Literal
 
 from ._utils import generate_u128_id, get_nanoseconds, to_u128
+
+logger = logging.getLogger(__name__)
 from .types import (
     AgentId,
     CognitiveType,
@@ -402,17 +405,26 @@ class EventBuilder:
                     queued = False
                 else:
                     task = loop.create_task(result)
-                    # Retrieve any exception so a failed background send does not
-                    # surface as "exception was never retrieved"; the client
-                    # reports transport errors through its own telemetry.
-                    task.add_done_callback(
-                        lambda t: None if t.cancelled() else t.exception()
-                    )
+                    task.add_done_callback(self._log_background_send_failure)
         except Exception:
             queued = False
         return {"success": queued, "queued": queued, "event_id": str(event_id)}
 
     # -- internal -------------------------------------------------------------
+
+    @staticmethod
+    def _log_background_send_failure(task: "asyncio.Task[Any]") -> None:
+        """Report a fire-and-forget send that failed.
+
+        Also retrieves the exception, without which asyncio logs a bare
+        "exception was never retrieved" at garbage-collection time with no
+        indication of which event it belonged to.
+        """
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.warning("Background event send failed: %s", exc, exc_info=exc)
 
     def _require_action(self, method_name: str) -> None:
         if not self._event_payload or "Action" not in self._event_payload:
