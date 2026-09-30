@@ -43,16 +43,22 @@ client.close()
 ### Async
 
 ```python
+import asyncio
 from minns import AsyncMinnsClient
 
-async with AsyncMinnsClient(api_key="your-api-key") as client:
-    await client.send_message({
-        "role": "user",
-        "content": "Alice: Paid €50 for lunch - split with Bob",
-        "case_id": "trip_2024",
-    })
-    answer = await client.query("Who owes whom?")
+async def main():
+    async with AsyncMinnsClient(api_key="your-api-key") as client:
+        await client.send_message({
+            "role": "user",
+            "content": "Alice: Paid €50 for lunch - split with Bob",
+            "case_id": "trip_2024",
+        })
+        answer = await client.query("Who owes whom?")
+
+asyncio.run(main())
 ```
+
+`AsyncMinnsClient` takes the same options as `MinnsClient` (except `default_async`) and has the same methods as coroutines, apart from `perceive_act_learn()`, which is only on the sync client.
 
 ---
 
@@ -238,13 +244,13 @@ client = MinnsClient(
 | `headers` | `dict[str, str]` | `Content-Type: application/json` | Custom HTTP headers (merged with defaults). |
 | `debug` | `bool` | `False` | Log all requests and responses to the console. |
 | `enable_semantic` | `bool` | `False` | Enable semantic indexing on all events by default. |
-| `enable_default_telemetry` | `bool` | `False` | Send telemetry to `/api/telemetry` (fire-and-forget). |
-| `on_telemetry` | `Callable` | — | Custom telemetry callback. |
+| `enable_default_telemetry` | `bool` | `False` | Accepted but not used by this version of the SDK. Use `on_telemetry` to receive telemetry. |
+| `on_telemetry` | `Callable` | — | Callback that receives request, error and batch-flush telemetry. |
 | `max_payload_size` | `int` | `1048576` | Maximum payload size in bytes (1MB). |
 | `auto_batch` | `bool` | `False` | Buffer events and send in batches. |
 | `batch_interval` | `float` | `0.1` | Max seconds before flushing the batch queue. |
 | `batch_max_size` | `int` | `10` | Max events before forcing a flush. |
-| `max_queue_size` | `int` | `1000` | Max local queue depth before enqueue throws. |
+| `max_queue_size` | `int` | `1000` | Max local queue depth in `auto_batch` mode. Beyond this, sending an event raises `MinnsError` (status 429). |
 
 > **Note:** The base URL defaults to `https://api.minns.ai`. Override with `base_url`.
 
@@ -277,7 +283,7 @@ Events (below) augment the same graph with explicit structured telemetry.
 
 Augment the graph with structured events when your application has explicit actions, observations, or tool calls to record.
 
-Create a builder with `client.event(agent_type)`. When `agent_id` and `session_id` are set on the client, every builder inherits them automatically:
+Create a builder with `client.event(agent_type)`. When `agent_id` and `session_id` are set on the client, every builder inherits them automatically. A builder needs both, so if they are not set on the client, pass them to `client.event()` or it raises `ValueError`:
 
 ```python
 # Uses client defaults — no config needed
@@ -320,8 +326,8 @@ Each builder defines **one** event type. Calling a second replaces the first.
 | `.goal(text, priority=, progress=)` | Add an active goal. |
 | `.caused_by(parent_id)` | Link to a parent event (causality). |
 | `.build()` | Return the raw `Event` dict. |
-| `.send()` | Build and send (waits for server response). |
-| `.enqueue()` | Build and queue (returns `LocalAck` immediately). |
+| `.send()` | Build and send (waits for server response). With `AsyncMinnsClient`, `await` it. |
+| `.enqueue()` | Build and send, ignoring errors, and return a `LocalAck`. It only returns straight away when the client uses `auto_batch=True`. Sync client only: with `AsyncMinnsClient` it does not send the event, so use `await .send()`. |
 
 #### Examples
 
@@ -345,7 +351,7 @@ client.event("learner") \
     .learning({"Outcome": {"query_id": "action-123", "success": True}}) \
     .send()
 
-# Fire-and-forget
+# Fire-and-forget (sync client; returns without waiting when auto_batch=True)
 receipt = client.event("my-agent") \
     .observation("web_page", {"url": "https://example.com"}) \
     .enqueue()
@@ -835,7 +841,7 @@ wm_stats = client.get_world_model_stats()
 
 ### PAL (Perceive-Act-Learn) Cycle
 
-High-level helpers that combine multiple API calls. Uses the LLM sidecar for local intent parsing.
+High-level helpers that combine multiple API calls. Uses the LLM sidecar for local intent parsing. `perceive_act_learn()` is only available on the sync `MinnsClient`.
 
 ```python
 # Parallel recall of strategies, memories, claims
